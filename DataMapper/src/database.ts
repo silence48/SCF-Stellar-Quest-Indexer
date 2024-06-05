@@ -1,60 +1,32 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import { MongoClient, Db, Document } from 'mongodb';
+import { Asset } from './fetchers.js'
 
-export async function openDb() {
-  return open({
-    filename: './assets.db',
-    driver: sqlite3.Database,
-  });
-}
+const uri = "mongodb://192.168.1.175:27017";
+const dbName = 'stellarDB';
 
-export async function initDb() {
-  const db = await openDb();
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS badges (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      code TEXT,
-      issuer TEXT,
-      difficulty TEXT,
-      subDifficulty TEXT,
-      category_broad TEXT,
-      category_narrow TEXT,
-      description_short TEXT,
-      description_long TEXT,
-      current INTEGER,
-      instructions TEXT,
-      issue_date TEXT,
-      image TEXT,
-      type TEXT,
-      aliases TEXT,
-      lastMarkUrlHolders TEXT,
-      lastMarkUrlTransactions TEXT
-    );
+let db: Db;
 
-    CREATE TABLE IF NOT EXISTS BadgeHolders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      owner TEXT,
-      transactions TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS transactions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      account_id TEXT,
-      badge_id INTEGER,
-      tx_hash TEXT,
-      ledger INTEGER,
-      timestamp INTEGER,
-      body TEXT,
-      meta TEXT,
-      result TEXT,
-      FOREIGN KEY (badge_id) REFERENCES badges(id)
-    );
-  `);
-
+export async function connectToDb(): Promise<Db> {
+  if (!db) {
+    const client = new MongoClient(uri);
+    await client.connect();
+    db = client.db(dbName);
+  }
   return db;
 }
 
-export async function fetchAssetsFromDb(assetLimit: number) {
-  const db = await openDb();
-  return db.all('SELECT DISTINCT code, issuer FROM badges LIMIT ?', assetLimit);
+export async function initDb(): Promise<Db> {
+  const db = await connectToDb();
+  await db.collection('badges').createIndex({ code: 1, issuer: 1 }, { unique: true });
+  await db.collection('BadgeHolders').createIndex({ owner: 1 }, { unique: true });
+  await db.collection('transactions').createIndex({ tx_hash: 1 }, { unique: true });
+  return db;
+}
+
+export async function fetchAssetsFromDb(db: Db, assetLimit: number): Promise<Asset[]> {
+  const assets = await db.collection('badges').find().limit(assetLimit).toArray();
+  return assets.map((asset: Document) => ({
+    code: asset.code,
+    issuer: asset.issuer
+  })) as Asset[];
 }

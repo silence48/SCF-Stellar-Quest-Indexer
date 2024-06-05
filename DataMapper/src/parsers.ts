@@ -1,9 +1,7 @@
 import * as toml from 'toml';
-import { openDb } from './database.js';
+import { connectToDb, initDb } from './database.js';
 
-export async function parseTomlFiles(urls: string[]) {
-  const db = await openDb();
-
+export async function parseTomlFiles(db: any, urls: string[]) {
   for (const url of urls) {
     try {
       const response = await fetch(url);
@@ -12,7 +10,7 @@ export async function parseTomlFiles(urls: string[]) {
       const currencies = data.CURRENCIES || [];
 
       for (const currency of currencies) {
-        const exists = await db.get('SELECT 1 FROM badges WHERE code = ? AND issuer = ?', [currency.code, currency.issuer]);
+        const exists = await db.collection('badges').findOne({ code: currency.code, issuer: currency.issuer });
         if (!exists) {
           const badge = {
             code: currency.code || '',
@@ -31,13 +29,7 @@ export async function parseTomlFiles(urls: string[]) {
             image: currency.image || ''
           };
 
-          await db.run(
-            `INSERT INTO badges (code, issuer, difficulty, subDifficulty, category_broad, category_narrow, 
-              description_short, description_long, current, instructions, issue_date, type, aliases, image) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [badge.code, badge.issuer, badge.difficulty, badge.subDifficulty, badge.category_broad, badge.category_narrow,
-            badge.description_short, badge.description_long, badge.current, badge.instructions, badge.issue_date, badge.type, JSON.stringify(badge.aliases), badge.image]
-          );
+          await db.collection('badges').insertOne(badge);
         }
       }
     } catch (error) {

@@ -1,5 +1,5 @@
 import * as StellarSDK from '@stellar/stellar-sdk';
-import { openDb } from './database.js';
+import { openDb } from './databaseold.js';
 import { sleep } from './utils.js';
 const API_KEY = `Bearer ${process.env.API_KEY || ''}`;
 const BASE_URL = 'https://api.stellar.expert';

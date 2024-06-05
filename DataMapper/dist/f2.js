@@ -10,10 +10,7 @@ export async function fetchTransactionsForHolder(db, address) {
     const assetFilters = [];
     const accountFilters = [`account[]=${address}`];
     // Fetch all badges from the database
-    const badges = await db.collection('badges').find().toArray();
-    badges.forEach((badge) => {
-        assetFilters.push(badge);
-    });
+    const badges = (await db.collection('badges').find().toArray());
     const urlBatches = createUrlBatches(assetFilters, accountFilters);
     const allTransactions = [];
     for (const urlBatch of urlBatches) {
@@ -62,10 +59,6 @@ async function fetchWithRetry(url) {
 export async function fetchAssetHolders(db, asset) {
     let allHolders = [];
     const assetData = await db.collection('badges').findOne({ code: asset.code, issuer: asset.issuer });
-    if (!assetData) {
-        console.warn(`No asset data found for ${asset.code}-${asset.issuer}`);
-        return allHolders;
-    }
     let nextUrl = assetData?.lastMarkUrlHolders ? `${BASE_URL}${assetData.lastMarkUrlHolders}` : `${BASE_URL}/explorer/public/asset/${asset.code}-${asset.issuer}/holders?order=desc&limit=200`;
     let badgeIndex = 1;
     while (nextUrl) {
@@ -79,7 +72,7 @@ export async function fetchAssetHolders(db, asset) {
                 assetIssuer: asset.issuer,
                 owner: record.account,
                 balance: record.balance,
-                transactions: [{ badgeId: assetData._id, tx: '' }], // Placeholder for transaction
+                transactions: [{ badgeId: assetData?._id ?? new ObjectId(), tx: '' }], // Placeholder for transaction
             }));
             allHolders = allHolders.concat(holders);
             // Paginate
@@ -152,7 +145,7 @@ export async function fetchAllAssetHolders(db, assets) {
  * @param {Badge[]} holders - List of holders to fetch transactions for.
  */
 export async function fetchTransactions(db, holders) {
-    const badges = await db.collection('badges').find().toArray();
+    const badges = (await db.collection('badges').find().toArray());
     const badgeMap = new Map();
     badges.forEach((badge) => {
         if (!badgeMap.has(badge.assetCode)) {

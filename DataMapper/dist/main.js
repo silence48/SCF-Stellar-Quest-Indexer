@@ -27,25 +27,25 @@ async function main() {
             'https://fastcheapandoutofcontrol.com/.well-known/stellar.toml'
         ];
         console.log('Parsing badges...');
-        await parseTomlFiles(badgeUrls);
+        await parseTomlFiles(db, badgeUrls);
         console.log('Badges parsed successfully.');
     }
     else {
-        let assets = [];
+        let assets;
         if (option === 'Index-All-Holders-All-Assets') {
-            assets = await fetchAssetsFromDb(0); // Fetch all assets since assetLimit is set to 0
+            assets = await fetchAssetsFromDb(db, 5000); // Fetch all assets since assetLimit is set to 5000
         }
         else {
-            assets = await fetchAssetsFromDb(assetLimit);
+            assets = await fetchAssetsFromDb(db, assetLimit);
         }
         if (option === 'Index-Asset-Holders' || option === 'Index-All-Holders-All-Assets') {
             console.log('Fetching and indexing asset holders...');
-            const holders = await fetchAllAssetHolders(assets);
+            const holders = await fetchAllAssetHolders(db, assets);
             console.log('Asset Holders:', JSON.stringify(holders, null, 2));
         }
         else if (option === 'Index-Asset-Holder-Metadata') {
             console.log('Fetching and indexing asset holder metadata...');
-            const holders = await fetchAllAssetHolders(assets);
+            const holders = await fetchAllAssetHolders(db, assets);
             console.log('Account Holders:', JSON.stringify(holders, null, 2));
             await fetchTransactions(db, holders);
             console.log('Data fetching completed.');
