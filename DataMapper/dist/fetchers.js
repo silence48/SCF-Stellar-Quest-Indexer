@@ -1,36 +1,32 @@
 import { ObjectId } from 'mongodb';
 import * as StellarSDK from '@stellar/stellar-sdk';
 import { sleep } from './utils.js';
-const API_KEY = `Bearer ${process.env.API_KEY || ''}`;
+import { config } from './env_config.js';
+const API_KEY = `${config.api_key}`;
+console.log(API_KEY);
 const BASE_URL = 'https://api.stellar.expert';
 const MAX_FILTERS = 10;
-const SLEEP_DURATION_MS = 200;
-// Add this function to fetch transactions for a single holder
+const SLEEP_DURATION_MS = 25;
 export async function fetchTransactionsForHolder(db, address) {
-    const assetFilters = [];
+    const assetFilters = new Set();
     const accountFilters = [`account[]=${address}`];
     // Fetch all badges from the database
     const badges = await db.collection('badges').find().toArray();
-    badges.forEach((badge) => {
-        assetFilters.push(badge);
+    badges.forEach(badge => {
+        assetFilters.add(`asset[]=${badge.assetCode}-${badge.assetIssuer}-2`);
     });
-    const urlBatches = createUrlBatches(assetFilters, accountFilters);
+    console.log(assetFilters);
+    const urlBatches = createUrlBatches(Array.from(assetFilters.values()), accountFilters);
     const allTransactions = [];
     for (const urlBatch of urlBatches) {
         const data = await fetchTransactionsForUrlBatch(db, urlBatch);
         if (data) {
             allTransactions.push(...data);
         }
-        await sleep(200); // Sleep to prevent rate limiting
+        await sleep(SLEEP_DURATION_MS);
     }
     return allTransactions;
 }
-/**
- * Fetch data from a URL with retry on failure.
- * @param {string} url - The URL to fetch data from.
- * @returns {Promise<any>} - The JSON response from the fetch.
- * @throws Will throw an error if the fetch fails.
- */
 async function fetchWithRetry(url) {
     try {
         const response = await fetch(url, {
@@ -53,19 +49,9 @@ async function fetchWithRetry(url) {
         throw new Error(`Failed to fetch ${url}: ${error.message}`);
     }
 }
-/**
- * Fetch asset holders for a given asset with pagination.
- * @param {Db} db - The database connection.
- * @param {Asset} asset - The asset to fetch holders for.
- * @returns {Promise<Badge[]>} - A list of badges for asset holders.
- */
 export async function fetchAssetHolders(db, asset) {
     let allHolders = [];
     const assetData = await db.collection('badges').findOne({ code: asset.code, issuer: asset.issuer });
-    if (!assetData) {
-        console.warn(`No asset data found for ${asset.code}-${asset.issuer}`);
-        return allHolders;
-    }
     let nextUrl = assetData?.lastMarkUrlHolders ? `${BASE_URL}${assetData.lastMarkUrlHolders}` : `${BASE_URL}/explorer/public/asset/${asset.code}-${asset.issuer}/holders?order=desc&limit=200`;
     let badgeIndex = 1;
     while (nextUrl) {
@@ -79,17 +65,15 @@ export async function fetchAssetHolders(db, asset) {
                 assetIssuer: asset.issuer,
                 owner: record.account,
                 balance: record.balance,
-                transactions: [{ badgeId: assetData._id, tx: '' }], // Placeholder for transaction
+                transactions: [{ badgeId: assetData?._id, tx: '' }], // Placeholder for transaction
             }));
             allHolders = allHolders.concat(holders);
-            // Paginate
             if (data._embedded.records.length < 200) {
                 nextUrl = null;
             }
             else {
                 nextUrl = BASE_URL + data._links.next.href;
             }
-            // Update the lastMarkUrlHolders in the badges table
             await db.collection('badges').updateOne({ code: asset.code, issuer: asset.issuer }, { $set: { lastMarkUrlHolders: data._links.self.href } });
             await sleep(SLEEP_DURATION_MS);
         }
@@ -105,16 +89,40 @@ export async function fetchAssetHolders(db, asset) {
     }
     return allHolders;
 }
-/**
- * Fetch holders for all assets.
- * @param {Db} db - The database connection.
- * @param {Asset[]} assets - List of assets to fetch holders for.
- * @returns {Promise<Badge[]>} - A list of all badges for asset holders.
- */
-export async function fetchAllAssetHolders(db, assets) {
+export async function fetchAllAssetHolders(db, assets, fetchFromApi) {
+    if (!fetchFromApi) {
+        // Fetch holders from database where badges match the provided assets
+        const assetCodes = assets.map(asset => asset.code);
+        const assetIssuers = assets.map(asset => asset.issuer);
+        const matchingBadges = await db.collection('badges').find({
+            code: { $in: assetCodes },
+            issuer: { $in: assetIssuers }
+        }).toArray();
+        const badgeIds = matchingBadges.map(badge => badge._id);
+        const badgeHolders = await db.collection('BadgeHolders').find({
+            'badges.badgeId': { $in: badgeIds }
+        }).toArray();
+        const allHolders = [];
+        for (const holder of badgeHolders) {
+            for (const badge of holder.badges) {
+                const asset = matchingBadges.find(matchingBadge => matchingBadge._id.equals(badge.badgeId));
+                if (asset) {
+                    allHolders.push({
+                        _id: badge.badgeId,
+                        index: asset.index,
+                        assetCode: asset.code,
+                        assetIssuer: asset.issuer,
+                        owner: holder.owner,
+                        balance: asset.balance,
+                        transactions: [{ badgeId: badge.badgeId, tx: badge.tx }]
+                    });
+                }
+            }
+        }
+        return allHolders;
+    }
     const allHolders = [];
     for (const asset of assets) {
-        console.log(`Fetching asset holders for asset: ${asset.code}-${asset.issuer}`);
         const holders = await fetchAssetHolders(db, asset);
         for (const holder of holders) {
             const existingHolder = await db.collection('BadgeHolders').findOne({ owner: holder.owner });
@@ -125,7 +133,6 @@ export async function fetchAllAssetHolders(db, assets) {
                 });
             }
             else {
-                // Existing holder, check and update transactions array
                 const existingTransactions = existingHolder.badges;
                 let transactionUpdated = false;
                 for (const entry of existingTransactions) {
@@ -152,18 +159,36 @@ export async function fetchAllAssetHolders(db, assets) {
  * @param {Badge[]} holders - List of holders to fetch transactions for.
  */
 export async function fetchTransactions(db, holders) {
-    const badges = await db.collection('badges').find().toArray();
-    const badgeMap = new Map();
-    badges.forEach((badge) => {
-        if (!badgeMap.has(badge.assetCode)) {
-            badgeMap.set(badge.assetCode, []);
+    const assetMap = new Map();
+    // Group holders by asset
+    holders.forEach(holder => {
+        const assetKey = `${holder.assetCode}-${holder.assetIssuer}`;
+        if (!assetMap.has(assetKey)) {
+            assetMap.set(assetKey, new Set());
         }
-        badgeMap.get(badge.assetCode)?.push(badge);
+        assetMap.get(assetKey)?.add(holder.owner);
     });
-    const urlBatches = createUrlBatches(holders, badgeMap);
-    for (const urlBatch of urlBatches) {
-        await fetchTransactionsForUrlBatch(db, urlBatch);
-        await sleep(SLEEP_DURATION_MS);
+    const allUrlBatches = [];
+    // Process assets in chunks of 2
+    const assetEntries = Array.from(assetMap.entries());
+    for (let i = 0; i < assetEntries.length; i += 10) {
+        const chunk = assetEntries.slice(i, i + 10);
+        const assetFilters = [];
+        const accountFilters = [];
+        chunk.forEach(([asset, owners]) => {
+            assetFilters.push(`asset[]=${asset}-2`);
+            //owners.forEach(owner => {
+            accountFilters.push(`account[]=${asset.split('-')[1]}`);
+            //});
+        });
+        const urlBatches = createUrlBatches(assetFilters, accountFilters);
+        allUrlBatches.push(...urlBatches);
+    }
+    // Run URL batches asynchronously with rate limiting
+    for (let i = 0; i < allUrlBatches.length; i += 10) {
+        const batch = allUrlBatches.slice(i, i + 10);
+        await Promise.all(batch.map(url => fetchTransactionsForUrlBatch(db, url)));
+        await sleep(1000); // Ensure no more than 10 requests per second
     }
 }
 /**
@@ -172,15 +197,15 @@ export async function fetchTransactions(db, holders) {
  * @param {Map<string, any[]>} badgeMap - Map of badge codes to badges.
  * @returns {string[]} - List of batched URLs.
  */
-export function createUrlBatches(holders, badgeMap) {
+export function createUrlBatches(assetFilters, accountFilters) {
     console.log('Entering createUrlBatches');
     const batches = [];
-    const baseUrl = 'https://api.stellar.expert/explorer/public/tx?order=asc&limit=200';
-    for (const [badgeCode, badges] of badgeMap.entries()) {
-        const holderAccounts = holders.filter(holder => holder.assetCode === badgeCode).map(holder => holder.owner);
-        for (let i = 0; i < holderAccounts.length; i += MAX_FILTERS) {
-            const accountBatch = holderAccounts.slice(i, i + MAX_FILTERS).join('&account[]=');
-            const url = `${baseUrl}&asset[]=${badgeCode}-${badges[0].assetIssuer}-2&account[]=${accountBatch}`;
+    const baseUrl = 'https://api.stellar.expert/explorer/public/tx?order=desc&limit=200&type[]=15&type[]=1';
+    for (let assetIndex = 0; assetIndex < assetFilters.length; assetIndex += MAX_FILTERS) {
+        const assetBatch = assetFilters.slice(assetIndex, assetIndex + MAX_FILTERS).join('&');
+        for (let accountIndex = 0; accountIndex < accountFilters.length; accountIndex += MAX_FILTERS) {
+            const accountBatch = accountFilters.slice(accountIndex, accountIndex + MAX_FILTERS).join('&');
+            const url = `${baseUrl}&${assetBatch}&${accountBatch}`;
             batches.push(url);
         }
     }
@@ -197,8 +222,9 @@ export async function fetchTransactionsForUrlBatch(db, url) {
     let nextUrl = url;
     const transactions = [];
     do {
-        console.log(`FETCHING FROM URL: ${nextUrl}`);
+        console.log(`Fetching from URL: ${nextUrl.slice(-72)}`); // .slice(-20)
         const data = await fetchWithRetry(nextUrl);
+        console.log(data._embedded.records.length);
         transactions.push(...data._embedded.records);
         await processTransactionRecords(db, data._embedded.records);
         // Check if we need to paginate
@@ -208,7 +234,6 @@ export async function fetchTransactionsForUrlBatch(db, url) {
         else {
             nextUrl = BASE_URL + data._links.next.href;
         }
-        await sleep(SLEEP_DURATION_MS);
     } while (nextUrl);
     return transactions;
 }
@@ -235,7 +260,7 @@ async function processTransactionRecords(db, records) {
             const paymentOps = transaction.operations.filter(op => op.type === 'payment');
             const txDetails = {
                 account_id: '',
-                badge_id: new ObjectId(), // Placeholder, to be set below
+                badge_ids: [],
                 tx_hash: record.hash,
                 ledger: record.ledger,
                 timestamp: record.ts,
@@ -248,13 +273,16 @@ async function processTransactionRecords(db, records) {
                 const badge = await db.collection('badges').findOne({ code: op.asset.code, issuer: op.asset.issuer });
                 if (badge) {
                     txDetails.account_id = op.destination;
-                    txDetails.badge_id = badge._id;
+                    // Avoid duplicates in badge_ids
+                    if (!txDetails.badge_ids.some(badgeId => badgeId.equals(badge._id))) {
+                        txDetails.badge_ids.push(badge._id);
+                    }
                     const badgeHolder = await db.collection('BadgeHolders').findOne({ owner: op.destination });
                     if (badgeHolder) {
                         const transactions = badgeHolder.badges;
                         updateTransactionHash(transactions, badge._id, record.hash);
-                        await saveTransactionData(db, txDetails);
                         await db.collection('BadgeHolders').updateOne({ owner: op.destination }, { $set: { badges: transactions } });
+                        await saveTransactionData(db, txDetails);
                         isPaymentProcessed = true;
                     }
                 }
@@ -266,13 +294,16 @@ async function processTransactionRecords(db, records) {
                     const badge = await db.collection('badges').findOne({ code: claimed.assetCode, issuer: claimed.assetIssuer });
                     if (badge) {
                         txDetails.account_id = claimed.account;
-                        txDetails.badge_id = badge._id;
+                        // Avoid duplicates in badge_ids
+                        if (!txDetails.badge_ids.some(badgeId => badgeId.equals(badge._id))) {
+                            txDetails.badge_ids.push(badge._id);
+                        }
                         const badgeHolder = await db.collection('BadgeHolders').findOne({ owner: claimed.account });
                         if (badgeHolder) {
                             const transactions = badgeHolder.badges;
                             updateTransactionHash(transactions, badge._id, record.hash);
-                            await saveTransactionData(db, txDetails);
                             await db.collection('BadgeHolders').updateOne({ owner: claimed.account }, { $set: { badges: transactions } });
+                            await saveTransactionData(db, txDetails);
                         }
                     }
                 }
@@ -282,14 +313,6 @@ async function processTransactionRecords(db, records) {
             console.error('Error processing record:', error, 'Record:', JSON.stringify(record, null, 2));
         }
     }
-}
-/**
- * Save transaction data to the database.
- * @param {Db} db - Database connection.
- * @param {any} tx - Transaction data to save.
- */
-async function saveTransactionData(db, tx) {
-    await db.collection('transactions').insertOne(tx);
 }
 /**
  * Update transaction hash for a badge.
@@ -304,7 +327,7 @@ function updateTransactionHash(transactions, badgeId, hash) {
             transactionEntry.tx = hash;
         }
         else if (transactionEntry.tx !== hash) {
-            console.warn(`Transaction hash conflict for badge ID: ${badgeId}`);
+            console.warn(`Transaction hash conflict for badge ID: ${badgeId} TxHash: ${hash} conflictedHash: ${transactionEntry.tx}`);
         }
     }
 }
@@ -313,6 +336,7 @@ function updateTransactionHash(transactions, badgeId, hash) {
  * @param {any} txMeta - Transaction meta data.
  * @returns {object[]} - List of claimed balances.
  */
+// Ensure correct processing of claimable balances
 function processTransactionMeta(txMeta) {
     const changes = [];
     // Extract changes from txChangesBefore
@@ -418,4 +442,18 @@ function isClaimableBalanceClaimed(change, trackedBalances) {
  */
 function bufferToString(buffer) {
     return String.fromCharCode(...buffer).replace(/\0/g, '');
+}
+// Ensure saveTransactionData function is defined
+async function saveTransactionData(db, tx) {
+    await db.collection('transactions').updateOne({ tx_hash: tx.tx_hash }, {
+        $set: {
+            account_id: tx.account_id,
+            ledger: tx.ledger,
+            timestamp: tx.timestamp,
+            body: tx.body,
+            meta: tx.meta,
+            result: tx.result,
+        },
+        $addToSet: { badge_ids: { $each: tx.badge_ids } }
+    }, { upsert: true });
 }

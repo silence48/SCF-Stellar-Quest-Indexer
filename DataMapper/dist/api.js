@@ -2,10 +2,11 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import { connectToDb } from './database.js';
 import { fetchTransactionsForHolder } from './fetchers.js';
+import { config } from './env_config.js';
 const app = express();
 const PORT = 5442;
 const AUTH_TOKENS = new Set([
-    process.env.authtoken
+    config.authtoken
 ]);
 app.use(bodyParser.json());
 app.post('/verifyPathfinder', async (req, res) => {

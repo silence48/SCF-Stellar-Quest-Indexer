@@ -1,7 +1,11 @@
 import { MongoClient, Db, Document } from 'mongodb';
 import { Asset } from './fetchers.js'
+import { config } from './env_config.js';
 
-const uri = "mongodb://192.168.1.175:27017";
+
+//const uri = "mongodb://192.168.1.175:27017"; use this if you don't have a password.
+const uri = `mongodb://dbUser:${config.db_password}@192.168.1.175:27017/myDatabase?authSource=admin`;
+
 const dbName = 'stellarDB';
 
 let db: Db;

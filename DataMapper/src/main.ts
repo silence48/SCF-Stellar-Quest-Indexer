@@ -1,7 +1,7 @@
 import inquirer from 'inquirer';
 import { initDb, fetchAssetsFromDb } from './database.js';
 import { parseTomlFiles } from './parsers.js';
-import { fetchAllAssetHolders, fetchTransactions, Asset } from './fetchers.js';
+import { fetchAllAssetHolders, fetchTransactions } from './fetchers.js';
 
 async function main() {
   const db = await initDb();
@@ -11,7 +11,7 @@ async function main() {
       type: 'list',
       name: 'option',
       message: 'Select an option:',
-      choices: ['Parse-Badges', 'Index-Asset-Holders', 'Index-Asset-Holder-Metadata', 'Index-All-Holders-All-Assets'],
+      choices: ['Parse-Badges', 'Index-Asset-Holders', 'Index-Asset-Holder-Metadata', 'Index-All-Holders-All-Assets', 'Drop-Transactions-Table'],
     },
     {
       type: 'number',
@@ -35,7 +35,10 @@ async function main() {
     await parseTomlFiles(db, badgeUrls);
     console.log('Badges parsed successfully.');
   } else {
-    let assets: Asset[];
+    let assets = [];
+    if (option === 'Drop-Transactions-Table'){
+      await db.collection('transactions').drop();
+    }
     if (option === 'Index-All-Holders-All-Assets') {
       assets = await fetchAssetsFromDb(db, 5000);   // Fetch all assets since assetLimit is set to 5000
     } else {
@@ -44,12 +47,12 @@ async function main() {
 
     if (option === 'Index-Asset-Holders' || option === 'Index-All-Holders-All-Assets') {
       console.log('Fetching and indexing asset holders...');
-      const holders = await fetchAllAssetHolders(db, assets);
-      console.log('Asset Holders:', JSON.stringify(holders, null, 2));
+      const holders = await fetchAllAssetHolders(db, assets, true);
+      console.log('Asset Holders:', holders.length);
     } else if (option === 'Index-Asset-Holder-Metadata') {
       console.log('Fetching and indexing asset holder metadata...');
-      const holders = await fetchAllAssetHolders(db, assets);
-      console.log('Account Holders:', JSON.stringify(holders, null, 2));
+      const holders = await fetchAllAssetHolders(db, assets, false);
+      console.log('Account Holders:', holders.length);
       await fetchTransactions(db, holders);
       console.log('Data fetching completed.');
     }
