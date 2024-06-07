@@ -1,0 +1,271 @@
+.container {
+    min-height: 100vh;
+    padding: 0 0.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .main {
+    padding: 5rem 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .title {
+    margin: 0;
+    line-height: 1.15;
+    font-size: 4rem;
+  }
+  
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    width: 100%;
+    max-width: 1200px;
+    margin-top: 2rem;
+  }
+  
+  .card {
+    padding: 1.5rem;
+    text-align: center;
+    color: inherit;
+    text-decoration: none;
+    border: 1px solid #eaeaea;
+    border-radius: 10px;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    cursor: pointer;
+  }
+  
+  .card:hover,
+  .card:focus,
+  .card:active {
+    color: #0070f3;
+    border-color: #0070f3;
+  }
+  
+  .badgeImage {
+    max-width: 100%;
+    height: 150px;
+    object-fit: cover;
+    margin-bottom: 1rem;
+  }
+  
+  .formContainer {
+    margin-top: 2rem;
+    padding: 1rem;
+    border: 1px solid #eaeaea;
+    border-radius: 10px;
+    width: 100%;
+    max-width: 600px;
+  }
+  
+  .formLabel {
+    display: block;
+    margin-bottom: 1rem;
+  }
+  
+
+.formInput, .formTextarea {
+    width: 100%;
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    border: 1px solid #555;
+    border-radius: 5px;
+    background-color: #333;
+    color: #f0f0f0;
+  }
+  /* stuff for multi-select for the aliases */
+  /* react-select styles for dark theme */
+  .react-select__control {
+    background-color: #333 !important;
+    color: #fff !important;
+    border-color: #555 !important;
+  }
+  
+  .react-select__menu {
+    background-color: #333 !important;
+  }
+  
+  .react-select__option {
+    color: #fff !important;
+  }
+  
+  .react-select__option--is-selected {
+    background-color: #0070f3 !important;
+  }
+  
+  .react-select__option--is-focused {
+    background-color: #555 !important;
+  }
+  
+  /* New CSS */
+  .react-select__multi-value {
+    background-color: #444 !important;
+    color: #fff !important;
+  }
+  
+  .react-select__multi-value__label {
+    color: #fff !important;
+  }
+  
+  .react-select__multi-value__remove {
+    color: #fff !important;
+  }
+  
+  .react-select__multi-value__remove:hover {
+    background-color: #0070f3 !important;
+    color: #fff !important;
+  }
+  
+  .formButton {
+    margin-right: 1rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    background-color: #0070f3;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  
+  .cancelButton {
+    background-color: #eaeaea;
+    color: black;
+  }
+  .container {
+    min-height: 100vh;
+    padding: 0 0.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .main {
+    padding: 5rem 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    width: 100%;
+    max-width: 1200px;
+  }
+  
+  .card {
+    margin: 1rem;
+    padding: 1rem;
+    text-align: center;
+    color: inherit;
+    text-decoration: none;
+    border: 1px solid #eaeaea;
+    border-radius: 10px;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    cursor: pointer;
+  }
+  
+  .card:hover,
+  .card:focus,
+  .card:active {
+    color: #0070f3;
+    border-color: #0070f3;
+  }
+  
+  .card h2 {
+    margin: 1rem 0 0;
+    font-size: 1.5rem;
+  }
+  
+  .badgeImage {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto 1rem;
+  }
+  
+  .modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+  }
+  
+  .modalContent {
+    background: #333;
+    color: #f0f0f0;
+    padding: 2rem;
+    border-radius: 10px;
+    width: 90%;
+    max-height: 95vh;
+    overflow-y: auto;
+    position: relative;
+  }
+  
+  .modalClose {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #f0f0f0;
+  }
+  
+  .formLabel {
+    display: block;
+    margin-bottom: 1rem;
+    font-weight: bold;
+  }
+  
+  .formInput, .formTextarea {
+    width: 100%;
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    border: 1px solid #555;
+    border-radius: 5px;
+    background-color: #555;
+    color: #f0f0f0;
+  }
+  
+  .formButton, .cancelButton {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  
+  .formButton {
+    background-color: #0070f3;
+    color: white;
+  }
+  
+  .cancelButton {
+    background-color: #ff0000;
+    color: white;
+    margin-left: 1rem;
+  }
+  
+  .formGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+    
